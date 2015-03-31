@@ -37,7 +37,10 @@
 #
 #  make all CALLSIGN=xxxx AIRCRAFT_TYPE=yyyy
 #   Builds all, where xxxx and yyyy are the callsign and aircraft type (maximum 5 and 4 characters respectively)
-#   They will be used by the system to indentify own airplane 
+#   They will be used by the system to identify own airplane
+#
+#  make all SIMULATOR=y
+#   Bulds a program only sending broadcasts to simulate another traffic
 #
 #  make clean
 #   Cleans out built binary files
@@ -48,7 +51,6 @@
 #
 # Using Eclipse it is possible to use another configuration to call the taget <program> to program directly the HEX on the MCB board
 # ============================================================================
-
 
 
 # Adapt to Windows if necessary
@@ -79,10 +81,10 @@ AVRDUDE = avrdude
 VERSION = 0.0.1
 
 # Default callsign (max 5 chars)
-CALLSIGN = 9HUCM
+CALLSIGN ?= 9HUCM
 
 # Default aircraft type (max 4 chars)
-AIRCRAFT_TYPE = TL20
+AIRCRAFT_TYPE ?= TL20
 
 # Source paths
 SRC = src/
@@ -105,10 +107,16 @@ TARGET = TCASP
 
 # List of C++ source files of TCASP
 CPP_SRC = \
-	tcas.cpp \
 	tcasalg.cpp \
 	vector.cpp \
 	aircraft.cpp
+
+# Add specific files depending on the configuration
+ifdef SIMULATOR
+	CPP_SRC += trafficSimulator.cpp
+else
+	CPP_SRC += tcas.cpp
+endif
 
 # List of TCASP objects
 OBJ = $(patsubst %.cpp, $(BIN)%.cpp.o, $(CPP_SRC))
