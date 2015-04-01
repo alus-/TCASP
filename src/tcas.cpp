@@ -1,12 +1,11 @@
 #define _GPS_NO_STATS
+#include <Arduino.h>
 #include <SPI.h>
 #include <RFM69.h>
 #include <RFM69registers.h>
-#include <SoftwareSerial.h>
-#include <serLCD.h>
-#include <Arduino.h>
-#include "aircraft.h"
 #include <TinyGPS.h>
+#include <serLCD.h>
+#include "aircraft.h"
 
 #define NETWORKID     100  //the same on all nodes that talk to each other
 //Match frequency to the hardware version of the radio on your Moteino (uncomment one):
@@ -33,7 +32,7 @@
 #define AIRCRAFT_TYPE "XXXX"
 #endif
 
-#include "Arduino.h"
+// Prototypes
 void setup();
 void init_state();
 bool gpsio();
@@ -44,20 +43,6 @@ void shutdown_state();
 void show_display();
 void loop();
 void show_state();
-RFM69 radio;
-serLCD lcd(14);
-SoftwareSerial gpsserial(15,16);
-TinyGPS gps;
-static enum state_t {
-  INIT,AWAIT_GPS,LISTENING,ACTIVE,SHUTDOWN} 
-state;
-static unsigned long tx_next;
-static unsigned long rx_last;
-static alertaircraft_t otheraircraft;
-static myaircraft_t myaircraft;
-static alertaircraft_t alertaircraft;
-static unsigned long displaymillis=0;
-
 void init_state();
 void await_gps_state();
 void listening_state();
@@ -65,6 +50,29 @@ void active_state();
 void shutdown_state();
 void execute();
 void show_state();
+
+// Globals
+RFM69 radio;
+serLCD lcd(14);
+SoftwareSerial gpsserial(12,13);
+TinyGPS gps;
+
+static enum state_t {
+  INIT,AWAIT_GPS,LISTENING,ACTIVE,SHUTDOWN}
+state;
+
+static unsigned long tx_next;
+static unsigned long rx_last;
+static alertaircraft_t otheraircraft;
+static myaircraft_t myaircraft;
+static alertaircraft_t alertaircraft;
+static unsigned long displaymillis=0;
+
+float oldbearing;
+short oldaltitude;
+
+const char * DISP[]={
+  "NONE","FORM","NRST","WARN","ALRT"};
 
 void setup() {
   radio.initialize(FREQUENCY,1,NETWORKID);
@@ -81,7 +89,7 @@ void setup() {
   COPY(myaircraft.callsign,CALLSIGN);
   COPY(myaircraft.type,AIRCRAFT_TYPE);
 
-  // set up the LCD's number of columns and rows: 
+  // set up the LCD's number of columns and rows:
   delay(2500);
   lcd.setBrightness(30);
   lcd.clear();
@@ -95,17 +103,51 @@ void setup() {
   lcd.print(str);
   gpsserial.begin(9600);
   Serial.begin(9600);
+  Serial.println(str);
   gpsserial.listen();
   pinMode(LED, OUTPUT);
 }
 
+void loop()
+{
+  state_t oldstate=state;
+  switch (state)
+  {
+  case INIT:
+  	Serial.println("INIT");
+    init_state();
+    break;
+  case AWAIT_GPS:
+  	Serial.println("GPS");
+    await_gps_state();
+    break;
+  case LISTENING:
+  	Serial.println("LISTEN");
+    listening_state();
+    break;
+  case ACTIVE:
+  	Serial.println("ACTIVE");
+    active_state();
+    break;
+  case SHUTDOWN:
+  	Serial.println("SHUTDOWN");
+    shutdown_state();
+    break;
+  }
+  if (oldstate!=state || millis()>displaymillis)
+  {
+    show_state();
+    show_display();
+    displaymillis=millis()+1000;
+    //send stats to serial port
+  }
+}
+
 void init_state()
 {
-  //initialize hw
   state=AWAIT_GPS;
 }
-float oldbearing;
-short oldaltitude;
+
 bool gpsio()
 {
   bool newdata=false;
@@ -161,6 +203,7 @@ bool gpsio()
   }
   return newdata;
 }
+
 void await_gps_state()
 {
   //await GPS reception, lock and position awareness
@@ -172,6 +215,7 @@ void await_gps_state()
   state=ACTIVE;
 #endif
 }
+
 void listening_state()
 {
   //listen GPS
@@ -191,6 +235,7 @@ void listening_state()
 
   if (radio.receiveDone())
   {
+  	Serial.println("RICEVUTO dati");
     wireprotocol_t &wire=*(wireprotocol_t *)radio.DATA;
     //    memcpy(&wire,(const void *)radio.DATA,wp_size);
     if (otheraircraft.from_wire(wire))
@@ -230,6 +275,7 @@ void listening_state()
     displaymillis=millis();
   }
 }
+
 void active_state()
 {
   //if tx older than 3 seconds
@@ -245,12 +291,12 @@ void active_state()
   }
   listening_state();
 }
+
 void shutdown_state()
 {
   //shut down peripherals
 }
-const char * DISP[]={
-  "NONE","FORM","NRST","WARN","ALRT"};
+
 void show_display()
 {
   char s[20];
@@ -264,12 +310,11 @@ void show_display()
     break;
   case LISTENING:
   case ACTIVE:
-
     if (alertaircraft.category==alertaircraft_t::NONE)
     {
       sprintf(s,"F%02d %03d %03dk",(int)(myaircraft.position.z/100),(int)(gps.course()/100),(int)gps.f_speed_kmph());
       lcd.setCursor(1,6);
-      lcd.print(s);    
+      lcd.print(s);
       lcd.setCursor(2,1);
       lcd.print(DISP[0]);
     }
@@ -282,7 +327,7 @@ void show_display()
       if (adiff==0) c='=';
       else if (adiff>0)
         c='^';
-      else 
+      else
       {
         c='-';
         adiff=-adiff;
@@ -297,41 +342,11 @@ void show_display()
       if (bid<=0) bid+=12;
       sprintf(s+4,"%2d.%02dkP%02dt%02d",alertaircraft.distanceinmetres/1000,(alertaircraft.distanceinmetres%1000)/10,bid,alertaircraft.remtime);
       lcd.setCursor(2,1);
-      lcd.print(s);    
+      lcd.print(s);
     }
     break;
   default:
     break;
-  }
-}
-
-void loop()
-{
-  state_t oldstate=state;
-  switch (state)
-  {
-  case INIT:
-    init_state();
-    break;
-  case AWAIT_GPS:
-    await_gps_state();
-    break;
-  case LISTENING:
-    listening_state();
-    break;
-  case ACTIVE:
-    active_state();
-    break;
-  case SHUTDOWN:
-    shutdown_state();
-    break;
-  }
-  if (oldstate!=state || millis()>displaymillis)
-  {
-    show_state();
-    show_display();
-    displaymillis=millis()+1000;
-    //send stats to serial port
   }
 }
 
@@ -361,16 +376,3 @@ void show_state()
     break;
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
