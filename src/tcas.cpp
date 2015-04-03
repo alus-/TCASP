@@ -115,98 +115,85 @@ void setup() {
 }
 
 void loop() {
-	state_t oldstate = state;
-	switch (state) {
-	case INIT:
-		state = AWAIT_GPS;
-		break;
-	case AWAIT_GPS:
-		//await GPS reception, lock and position awareness
-		if (gpsio()) state = LISTENING;
-		#if DEBUG_ALWAYSACTIVE
-			state=ACTIVE;
-		#endif
-		break;
-	case LISTENING:
-		listening_state();
-		break;
-	case ACTIVE:
-		active_state();
-		break;
-	case SHUTDOWN:
-		// Shut down peripherals...
-		break;
+	if(gpsio())
+	{
+		digitalWrite(LED, HIGH);
+		wireprotocol_t wire;
+		myaircraft.to_wire(wire);
+		radio.send(RF69_BROADCAST_ADDR, &wire, wp_size);
+		tx_next = millis() + 3000;
+		digitalWrite(LED, LOW);
 	}
 
-	if (oldstate != state /*|| millis() > displaymillis*/) {
-		show_state();
-		show_display();
-		displaymillis = millis() + 1000;
+	if (radio.receiveDone()) {
+			Serial.println("RICEVUTO dati");
+			wireprotocol_t &wire = *(wireprotocol_t *) radio.DATA;
+			//    memcpy(&wire,(const void *)radio.DATA,wp_size);
+			if (otheraircraft.from_wire(wire)) {
+
+				char string[40];
+				sprintf(string,"x:%d, y:%d, z:%d, bea:%d",otheraircraft.position.xy.x,otheraircraft.position.xy.y,otheraircraft.position.z,otheraircraft.bearingindegrees);
+				Serial.println(string);
+
+
+
+				myaircraft.calcalert(otheraircraft);
+				//eliminate local echos
+				//if (alert.distanceinmetres!=0)
+			{
+				//if aircraft is same as alert update it unconditionally
+				if (memcmp(alertaircraft.callsign, otheraircraft.callsign, 5) == 0)
+					alertaircraft = otheraircraft;
+				else {
+					//is alert level greater ?
+					if (otheraircraft.category > alertaircraft.category)
+						alertaircraft = otheraircraft;
+					else if (otheraircraft.category == alertaircraft.category) {
+						if (otheraircraft.distanceinmetres < alertaircraft.distanceinmetres)
+							alertaircraft = otheraircraft;
+					}
+				}
+			}
+		}
 	}
 }
 
 bool gpsio() {
-	bool newdata = false;
 	while (gpsserial.available()) {
-#if DEBUG_GPS
-		char c=gpsserial.read();
-		Serial.write(c);
-		newdata|=gps.encode(c);
-#else
-		newdata |= gps.encode(gpsserial.read());
-#endif
-	}
-	if (newdata) {
-		unsigned long time;
-		float x, y;
-		//    gps.f_get_position(&myaircraft.position.xy.x,&myaircraft.position.xy.y,&time);
-		gps.f_get_position(&x, &y, &time);
-#if !DEBUG_ARMSTATE
-		if (x == TinyGPS::GPS_INVALID_F_ANGLE
-				|| y == TinyGPS::GPS_INVALID_F_ANGLE
-				|| time == TinyGPS::GPS_INVALID_AGE) {
-			state = AWAIT_GPS;
-			return false;
+		if(gps.encode(gpsserial.read())) {
+			unsigned long time;
+			float x, y;
+			//    gps.f_get_position(&myaircraft.position.xy.x,&myaircraft.position.xy.y,&time);
+			gps.f_get_position(&x, &y, &time);
+
+			if (time > 5000)
+				return false;
+
+			if (x == TinyGPS::GPS_INVALID_F_ANGLE || y == TinyGPS::GPS_INVALID_F_ANGLE || time == TinyGPS::GPS_INVALID_AGE)
+				return false;
+
+			myaircraft.position.xy.x = short(myaircraft.fr_to_word(myaircraft.fractional(x)));
+			myaircraft.position.xy.y = short(myaircraft.fr_to_word(myaircraft.fractional(y)));
+			myaircraft.position.z = gps.f_altitude() * 3.28084; //altitude in feet
+			Dim2::VectorAC xy(0, 0);
+			xy.bearing = gps.f_course() * pi / 180;
+			xy.mod = gps.f_speed_mps();
+			xy.updatecartesian();
+			myaircraft.arate = (xy.bearing - oldbearing);
+			oldbearing = xy.bearing;
+			myaircraft.speed.xy.x = xy.x;
+			myaircraft.speed.xy.y = xy.y;
+			myaircraft.speed.z = myaircraft.position.z - oldaltitude;
+			oldaltitude = myaircraft.position.z;
+			return true;
 		}
-#endif
-		//check position if invalid change state and return false;
-		myaircraft.position.xy.x = short(
-				myaircraft.fr_to_word(myaircraft.fractional(x)));
-		myaircraft.position.xy.y = short(
-				myaircraft.fr_to_word(myaircraft.fractional(y)));
-		myaircraft.position.z = gps.f_altitude() * 3.28084; //altitude in feet
-		Dim2::VectorAC xy(0, 0);
-		xy.bearing = gps.f_course() * pi / 180;
-		xy.mod = gps.f_speed_mps();
-		xy.updatecartesian();
-		myaircraft.arate = (xy.bearing - oldbearing);
-		oldbearing = xy.bearing;
-		myaircraft.speed.xy.x = xy.x;
-		myaircraft.speed.xy.y = xy.y;
-		myaircraft.speed.z = myaircraft.position.z - oldaltitude;
-		oldaltitude = myaircraft.position.z;
-#if !DEBUG_ARMSTATE
-		if (time > 5000) {
-			state = AWAIT_GPS;
-			return false;
-		}
-#endif
-#if !DEBUG_ALWAYSACTIVE
-		if (xy.mod < 4)
-			state = LISTENING;
-		if (xy.mod > 6)
-			state = ACTIVE;
-#endif
 	}
-	return newdata;
+	return false;
 }
 
 
 
 void listening_state() {
-	//listen GPS
-	gpsio();
-
 	bool alertupdated = false;
 
 	//Reset alert if OLD ALERT
@@ -248,19 +235,6 @@ void listening_state() {
 	if (alertupdated) displaymillis = millis();
 }
 
-void active_state() {
-	//if tx older than 3 seconds
-	if (millis() > tx_next) {
-		digitalWrite(LED, HIGH);
-		wireprotocol_t wire;
-		myaircraft.to_wire(wire);
-		radio.send(RF69_BROADCAST_ADDR, &wire, wp_size);
-		tx_next = millis() + 3000;
-		digitalWrite(LED, LOW);
-		radio.receiveDone();      //switch to RX mode
-	}
-	listening_state();
-}
 
 void show_display() {
 	char s[20];
