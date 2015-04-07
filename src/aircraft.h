@@ -5,76 +5,68 @@
 #include "vector.h"
 #define COPY(a,b) memcpy(a,b,sizeof(a))
 
-struct TimeInterval_t
-{
-  char from;
-  char to;
-  TimeInterval_t(char _from, char _to):
-  from(_from),to(_to){
-  }
-  TimeInterval_t reverse()
-  {
-    return TimeInterval_t(to,from);
-  }
-  TimeInterval_t intersect(TimeInterval_t t2)
-  {
-    return TimeInterval_t(max(from,t2.from),min(to,t2.to));
-  }
-  bool invalid(){
-    return to<from;
-  }
-};
-struct Results_t
-{
-  char time;
-  int distanceZ;
-  int distanceXY;;
-  Results_t(char _time,int _distanceZ,int _distanceXY):
-  time(_time),distanceZ(_distanceZ),distanceXY(_distanceXY){
-  };
+struct TimeInterval_t {
+	char from;
+	char to;
+	TimeInterval_t(char _from, char _to) :
+			from(_from), to(_to) {
+	}
+	TimeInterval_t reverse() {
+		return TimeInterval_t(to,from);
+	}
+	TimeInterval_t intersect(TimeInterval_t t2) {
+		return TimeInterval_t(max(from,t2.from),min(to,t2.to));
+	}
+	bool invalid() {
+		return to<from;
+	}
 };
 
-struct aircraft_t
-{
-  char callsign[5];
-  char type[4];
-  Dim3::Point position;
-  Dim3::Vector speed;
-  float arate;
-
-  float fractional(float a){
-    return a-(int)a;
-  }
-  word fr_to_word(float a){
-    return (word)(a*65536);
-  }
-  float fr_from_word(word a){
-    return (float)(a)/65536;
-  }
-  void to_wire(wireprotocol_t &wire);
-  bool from_wire(const wireprotocol_t &wire);
+struct Results_t {
+	char time;
+	int distanceZ;
+	int distanceXY;
+	Results_t(char _time, int _distanceZ, int _distanceXY) :
+			time(_time), distanceZ(_distanceZ), distanceXY(_distanceXY) {
+	};
 };
 
-struct alertaircraft_t:
-aircraft_t
-{
-  int distanceinmetres;
-  short bearingindegrees;
-  char remtime;
-  unsigned long atime;
-  enum category_t {
-    NONE,FORMATION,NOTICE,WARNING,ALERT    };
-  enum category_t category;
+struct aircraft_t {
+	char callsign[5];
+	char type[4];
+	Dim3::Point position;
+	Dim3::Vector speed;
+	float arate;
+
+	float fractional(float a) {
+		return a-(int)a;
+	}
+	word fr_to_word(float a) {
+		return (word)(a*65536);
+	}
+	float fr_from_word(word a) {
+		return (float)(a)/65536;
+	}
+	void to_wire(wireprotocol_t &wire);
+	bool from_wire(const wireprotocol_t &wire);
+};
+
+struct alertaircraft_t: aircraft_t {
+	int distanceinmetres;
+	short bearingindegrees;
+	char remtime;
+	unsigned long atime;
+	enum category_t {
+		NONE, FORMATION, NOTICE, WARNING, ALERT
+	};
+	enum category_t category;
 
 };
 
-struct myaircraft_t:
-public aircraft_t
-{
-  void calcalert(alertaircraft_t &otheraircraft);
-  TimeInterval_t RAZTimeInterval(float s1, float v1, TimeInterval_t t);
-  Results_t calcresults(alertaircraft_t &otheraircraft,const TimeInterval_t &t);
+struct myaircraft_t: public aircraft_t {
+	void calcalert(alertaircraft_t &otheraircraft);
+	TimeInterval_t RAZTimeInterval(float s1, float v1, TimeInterval_t t);
+	Results_t calcresults(alertaircraft_t &otheraircraft, const TimeInterval_t &t);
 };
 #endif
-
 

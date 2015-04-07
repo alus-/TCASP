@@ -121,10 +121,7 @@ void getSimulatedGPSdata() {
 	myaircraft.position.xy.x=short(myaircraft.fr_to_word(myaircraft.fractional(symData[index].x)));
 	myaircraft.position.xy.y=short(myaircraft.fr_to_word(myaircraft.fractional(symData[index].y)));
 	myaircraft.position.z=symData[index].alt*3.28084; //altitude in feet
-	Dim2::VectorAC xy(0,0);
-	xy.bearing=symData[index].course*pi/180;
-	xy.mod=symData[index].speed;
-	xy.updatecartesian();
+	Dim2::VectorAC xy(float(symData[index].speed*2.7777777), float(symData[index].course*pi/180)); //2.77777 is to convert Km/h to m/s
 	myaircraft.arate=(xy.bearing-oldbearing);
 	oldbearing=xy.bearing;
 	myaircraft.speed.xy.x=xy.x;
