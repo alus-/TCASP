@@ -60,6 +60,11 @@ bool moving;
 float speed;
 
 void setup() {
+	// Setup the TX led
+	pinMode(LED, OUTPUT);
+	digitalWrite(LED, HIGH); //turn it on for all the time of setup
+
+	// Setup the serial port
 	Serial.begin(9600);      // open the serial port at 9600 bps:
 	while(!Serial) delay(5);
 	Serial.println("Serial port initialized.");
@@ -76,6 +81,9 @@ void setup() {
 	while(!tryOpenGPS(true)) {
 		Serial.println("Unable to open GPS serial at 4800 bpm...");
 	}
+	//while(!tryOpenGPS(false)) {
+	//	Serial.println("Unable to open GPS serial at 9600 bpm...");
+	//}
 
 	// Disable GLL sentences
 	byte cmd[] = {0xB5, 0x62, 0x06, 0x01, 0x08, 0x00, 0xF0, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x2A};
@@ -103,7 +111,7 @@ void setup() {
 	gpsserial.write(cmd,sizeof(cmd));
 	gpsserial.flush();
 
-	Serial.println("GPS initialized!");
+	Serial.println("GPS initialized and configured!");
 
 	// Setup the RF interface
 	rf.initialize(FREQUENCY, 1, NETWORKID);
@@ -113,9 +121,6 @@ void setup() {
 	delay(20);
 	Serial.println("RF interface initialized.");
 
-	// Setup the TX led
-	pinMode(LED, OUTPUT);
-
 	// Initialize globals
 	memset(&myaircraft, 0, sizeof(myaircraft));
 	memset(&otheraircraft, 0, sizeof(otheraircraft));
@@ -123,6 +128,9 @@ void setup() {
 	memcpy(myaircraft.callsign, CALLSIGN, sizeof(myaircraft.callsign));
 	memcpy(myaircraft.type, AIRCRAFT_TYPE, sizeof(myaircraft.type));
 	Serial.println("Variables initialized.");
+
+	// Setup finished turn off the led
+	digitalWrite(LED, LOW);
 }
 
 void loop() {
@@ -163,8 +171,6 @@ bool readGPS() {
 			float x, y;
 			//    gps.f_get_position(&myaircraft.position.xy.x,&myaircraft.position.xy.y,&time);
 
-
-
 			gps.f_get_position(&x, &y, &time);
 
 			long lat, lon;
@@ -172,15 +178,6 @@ bool readGPS() {
 
 			long alt = gps.altitude();
 
-
-/*
-			Serial.print("\nMy lat: ");
-			Serial.print(lat);
-			Serial.print(" lon: ");
-			Serial.print(lon);
-			Serial.print(" alt:");
-			Serial.println(alt);
-*/
 
 			if (time > 5000)
 				return false;
@@ -191,6 +188,15 @@ bool readGPS() {
 			// Don't do things twice...
 			if (!gps.BothGGAandRMCreceived())
 				return false;
+
+
+			Serial.print("\nMy lat: ");
+			Serial.print(lat);
+			Serial.print(" lon: ");
+			Serial.print(lon);
+			Serial.print(" alt:");
+			Serial.println(alt);
+
 
 			myaircraft.position.xy.x = short(myaircraft.fr_to_word(myaircraft.fractional(x)));
 /*
