@@ -44,6 +44,9 @@ TinyGPS::TinyGPS()
   ,  _term_number(0)
   ,  _term_offset(0)
   ,  _gps_data_good(false)
+  ,  _gga_rcvd(false)
+  ,  _rmc_rcvd(false)
+  ,  _gga_rmc_time(GPS_INVALID_TIME)
 #ifndef _GPS_NO_STATS
   ,  _encoded_characters(0)
   ,  _good_sentences(0)
@@ -178,6 +181,13 @@ bool TinyGPS::term_complete()
         _last_time_fix = _new_time_fix;
         _last_position_fix = _new_position_fix;
 
+        if (_new_time != _gga_rmc_time)
+        {
+          _rmc_rcvd = false;
+          _gga_rcvd = false;
+          _gga_rmc_time = _new_time;
+        }
+
         switch(_sentence_type)
         {
         case _GPS_SENTENCE_GPRMC:
@@ -187,6 +197,7 @@ bool TinyGPS::term_complete()
           _longitude = _new_longitude;
           _speed     = _new_speed;
           _course    = _new_course;
+          _rmc_rcvd  = true;
           break;
         case _GPS_SENTENCE_GPGGA:
           _altitude  = _new_altitude;
@@ -195,6 +206,7 @@ bool TinyGPS::term_complete()
           _longitude = _new_longitude;
           _numsats   = _new_numsats;
           _hdop      = _new_hdop;
+          _gga_rcvd  = true;
           break;
         }
 

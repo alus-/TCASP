@@ -89,6 +89,8 @@ public:
   float f_speed_mps();
   float f_speed_kmph();
 
+  inline bool BothGGAandRMCreceived() { return _gga_rcvd && _rmc_rcvd; }
+
   static int library_version() { return _GPS_VERSION; }
 
   static float distance_between (float lat1, float long1, float lat2, float long2);
@@ -124,6 +126,10 @@ private:
   byte _term_number;
   byte _term_offset;
   bool _gps_data_good;
+
+  bool _gga_rcvd;
+  bool _rmc_rcvd;
+  unsigned long _gga_rmc_time;
 
 #ifndef _GPS_NO_STATS
   // statistics

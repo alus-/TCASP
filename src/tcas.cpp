@@ -188,6 +188,10 @@ bool readGPS() {
 			if (x == TinyGPS::GPS_INVALID_F_ANGLE || y == TinyGPS::GPS_INVALID_F_ANGLE || time == TinyGPS::GPS_INVALID_AGE)
 				return false;
 
+			// Don't do things twice...
+			if (!gps.BothGGAandRMCreceived())
+				return false;
+
 			myaircraft.position.xy.x = short(myaircraft.fr_to_word(myaircraft.fractional(x)));
 /*
 			Serial.print("lat transformed: ");
