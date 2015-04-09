@@ -5,7 +5,7 @@
 #include <RFM69registers.h>
 #include <SoftwareSerial.h>
 #include <TinyGPS.h>
-#include "aircraft.h"
+
 
 #define NETWORKID     100  //the same on all nodes that talk to each other
 //Match frequency to the hardware version of the radio on your Moteino (uncomment one):
@@ -31,6 +31,7 @@
 #define MOVING_TX_TIMEOUT 3000
 #define STANDING_TX_TIMEOUT 30000
 
+
 // Prototypes
 void setup();
 void loop();
@@ -46,10 +47,6 @@ RFM69 rf;
 SoftwareSerial gpsserial(GPS_RX_PIN, GPS_TX_PIN);
 TinyGPS gps;
 
-static alertaircraft_t otheraircraft;
-static myaircraft_t myaircraft;
-static alertaircraft_t alertaircraft;
-
 static unsigned long tx_time;
 
 float oldbearing;
@@ -58,6 +55,18 @@ short oldaltitude;
 bool moving;
 
 float speed;
+
+struct Aircraft
+{
+	float lat;
+	float lon;
+	float alt;
+	float speed;
+	float course;
+	float vario;
+	float rot;
+} myPlane, otherPlane;
+
 
 void setup() {
 	// Setup the TX led
@@ -121,14 +130,6 @@ void setup() {
 	delay(20);
 	Serial.println("RF interface initialized.");
 
-	// Initialize globals
-	memset(&myaircraft, 0, sizeof(myaircraft));
-	memset(&otheraircraft, 0, sizeof(otheraircraft));
-	memset(&alertaircraft, 0, sizeof(alertaircraft));
-	memcpy(myaircraft.callsign, CALLSIGN, sizeof(myaircraft.callsign));
-	memcpy(myaircraft.type, AIRCRAFT_TYPE, sizeof(myaircraft.type));
-	Serial.println("Variables initialized.");
-
 	// Setup finished turn off the led
 	digitalWrite(LED, LOW);
 }
@@ -168,54 +169,27 @@ bool readGPS() {
 		if(gps.encode(gpsserial.read())) {
 
 			unsigned long time;
-			float x, y;
-			//    gps.f_get_position(&myaircraft.position.xy.x,&myaircraft.position.xy.y,&time);
-
-			gps.f_get_position(&x, &y, &time);
-
-			long lat, lon;
-			gps.get_position(&lat,&lon, &time);
-
-			long alt = gps.altitude();
-
+			float lat, lon;
+			gps.f_get_position(&lat, &lon, &time);
 
 			if (time > 5000)
 				return false;
 
-			if (x == TinyGPS::GPS_INVALID_F_ANGLE || y == TinyGPS::GPS_INVALID_F_ANGLE || time == TinyGPS::GPS_INVALID_AGE)
+			if (lat == TinyGPS::GPS_INVALID_F_ANGLE || lon == TinyGPS::GPS_INVALID_F_ANGLE || time == TinyGPS::GPS_INVALID_AGE)
 				return false;
 
 			// Don't do things twice...
 			if (!gps.BothGGAandRMCreceived())
 				return false;
 
+			myPlane.lat = radians(lat);
+			myPlane.lon = radians(lon);
+			myPlane.alt = gps.f_altitude();
+			myPlane.speed = gps.f_speed_mps();
+			myPlane.course = radians(gps.f_course());
 
-			Serial.print("\nMy lat: ");
-			Serial.print(lat);
-			Serial.print(" lon: ");
-			Serial.print(lon);
-			Serial.print(" alt:");
-			Serial.println(alt);
+			//TODO: add accelerations
 
-
-			myaircraft.position.xy.x = short(myaircraft.fr_to_word(myaircraft.fractional(x)));
-/*
-			Serial.print("lat transformed: ");
-			Serial.println(myaircraft.position.xy.y);
-			Serial.print("lon transformed: ");
-			Serial.println(myaircraft.position.xy.x);
-			Serial.println();
-*/
-			myaircraft.position.xy.y = short(myaircraft.fr_to_word(myaircraft.fractional(y)));
-			myaircraft.position.z = gps.f_altitude() * 3.28084; //altitude in feet
-			speed = gps.f_speed_mps();
-			Dim2::VectorAC hSpeed(speed,float(gps.f_course()*pi/180));
-			myaircraft.speed.xy.x = hSpeed.x;
-			myaircraft.speed.xy.y = hSpeed.y;
-			myaircraft.arate = (hSpeed.bearing - oldbearing);
-			oldbearing = hSpeed.bearing;
-			myaircraft.speed.z = myaircraft.position.z - oldaltitude;
-			oldaltitude = myaircraft.position.z;
 			return true;
 		}
 	}
